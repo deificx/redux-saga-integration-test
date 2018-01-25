@@ -15,6 +15,8 @@ function createMockedEffects() {
   return {
     _setHooks: setHooks,
     _getStore: getStore,
+    actionChannel: effects.actionChannel,
+    eventChannel: effects.eventChannel,
     call: jest.fn(mockCall),
     fork: effects.fork,
     take: effects.take,
