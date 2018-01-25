@@ -16,6 +16,7 @@ function createMockedEffects() {
     _setHooks: setHooks,
     _getStore: getStore,
     call: jest.fn(mockCall),
+    fork: effects.fork,
     take: effects.take,
     takeLatest: jest.fn(createMockTake(effects.takeLatest)),
     takeEvery: jest.fn(createMockTake(effects.takeEvery)),
@@ -76,18 +77,14 @@ const defaultOwnProps = {
 function createMockedStore(reducer, sagas, initialStore, mocks) {
   const sagaMiddleware = createSagaMiddleware();
   const combinedReducer = typeof reducer === 'function' ? reducer : combineReducers(reducer);
-  const store = createStore(
-    combinedReducer,
-    fromJS(initialStore),
-    applyMiddleware(sagaMiddleware)
-  );
-  sagas.forEach((saga) => sagaMiddleware.run(saga));
+  const store = createStore(combinedReducer, fromJS(initialStore), applyMiddleware(sagaMiddleware));
+  sagas.forEach(saga => sagaMiddleware.run(saga));
   mockedEffects._setHooks(store, mocks); // eslint-disable-line no-underscore-dangle
   return store;
 }
 
 function wire({
-  reducer = (state) => state,
+  reducer = state => state,
   sagas = [],
   component = {},
   params,
@@ -98,25 +95,29 @@ function wire({
   createMockedStore(reducer, sagas, initialStore, mocks);
 
   return connectStateAndProps(
-    component.mapStateToProps, component.mapDispatchToProps, params, ownProps
+    component.mapStateToProps,
+    component.mapDispatchToProps,
+    params,
+    ownProps
   );
 }
 
 function later(fn) {
-  return new Promise((resolve) => setTimeout(resolve, 10)).then(() => fn());
+  return new Promise(resolve => setTimeout(resolve, 10)).then(() => fn());
 }
 
 function connectStateAndProps(mapStateToProps, mapDispatchToProps, params, ownProps) {
-  const initialProps = Object.assign({}, ownProps, { params: params || ownProps.params });
-  const propsGetter = mapStateToProps ?
-    () => mapStateToProps(mockedEffects._getStore('get props').getState(), initialProps) : // eslint-disable-line no-underscore-dangle
-    () => {};
+  const initialProps = Object.assign({}, ownProps, {
+    params: params || ownProps.params,
+  });
+  const propsGetter = mapStateToProps
+    ? () => mapStateToProps(mockedEffects._getStore('get props').getState(), initialProps) // eslint-disable-line no-underscore-dangle
+    : () => {};
 
   return {
-    functions: mapDispatchToProps ? asPromise(
-      mapDispatchToProps(dispatch, initialProps),
-      propsGetter
-    ) : {},
+    functions: mapDispatchToProps
+      ? asPromise(mapDispatchToProps(dispatch, initialProps), propsGetter)
+      : {},
     dispatch: (...args) => {
       dispatch(...args);
       return later(propsGetter);
@@ -127,19 +128,24 @@ function connectStateAndProps(mapStateToProps, mapDispatchToProps, params, ownPr
 
 function asPromise(actions, props) {
   return Object.keys(actions).reduce(
-    (host, key) => Object.assign(host, {
-      [key]: typeof actions[key] === 'function' ? (...args) => {
-        actions[key](...args);
-        return later(props);
-      } : asPromise(actions[key], props),
-    }), {}
+    (host, key) =>
+      Object.assign(host, {
+        [key]:
+          typeof actions[key] === 'function'
+            ? (...args) => {
+                actions[key](...args);
+                return later(props);
+              }
+            : asPromise(actions[key], props),
+      }),
+    {}
   );
 }
 
 function structuredMocks(originalFunctions, mocks) {
-  return Object.keys(mocks).map(
-    (fn) => [originalFunctions[fn], mocks[fn]]
-  ).filter((mock) => mock[1]);
+  return Object.keys(mocks)
+    .map(fn => [originalFunctions[fn], mocks[fn]])
+    .filter(mock => mock[1]);
 }
 
 module.exports = {
